@@ -21,7 +21,7 @@
   --ink:       #111111;
   --mid:       #888888;
   --rule:      #DDDDDD;
-  --watch:     #EDF3EF;
+  --watch:     #C8F0D0;
   --watch-ink: #2A6B3A;
 }
 
@@ -31,6 +31,77 @@ html, body {
   background: #E8E4DC;
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
+}
+
+
+
+/* ── PAST MATCHES ── */
+.day-group.past { display: none; }
+
+.past-toggle {
+  text-align: center;
+  padding: .75rem 1.25rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.past-toggle-btn {
+  font-family: inherit;
+  font-size: .6rem; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--mid); background: transparent;
+  border: 1px solid var(--rule);
+  padding: .35rem .8rem;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: all .15s;
+}
+.past-toggle-btn:hover { border-color: var(--ink); color: var(--ink); }
+
+/* ── TODAY SECTION ── */
+.today-section {
+  background: var(--ink);
+  padding: 1.1rem 1.25rem 1.25rem;
+  border-bottom: 3px solid #FFD060;
+}
+
+.today-label {
+  font-size: .6rem; font-weight: 700;
+  letter-spacing: .2em; text-transform: uppercase;
+  color: #FFD060; margin-bottom: .7rem;
+}
+
+.today-none {
+  font-size: .82rem; font-weight: 400;
+  color: #555; font-style: italic;
+}
+
+.today-match {
+  display: flex; align-items: center;
+  padding: .55rem 0;
+  border-bottom: 1px solid #222;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  gap: .6rem;
+}
+.today-match:last-child { border-bottom: none; }
+.today-match:active { opacity: .7; }
+
+.today-flags {
+  display: flex; align-items: center; gap: .2rem; flex-shrink: 0;
+}
+.today-flag { font-size: 1.1rem; line-height: 1; }
+
+.today-teams {
+  flex: 1; min-width: 0;
+  font-size: .88rem; font-weight: 600;
+  color: #fff; letter-spacing: -.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.today-time {
+  font-size: .88rem; font-weight: 900;
+  color: #FFD060; letter-spacing: -.01em;
+  flex-shrink: 0;
 }
 
 /* ── PAGE SHELL ── */
@@ -181,7 +252,7 @@ html, body {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.match.watching { background: var(--watch); }
+.match.watching { background: var(--watch); border-left: 4px solid var(--watch-ink); }
 .match.open { background: #fff; }
 .match.open.watching { background: var(--watch); }
 
@@ -318,6 +389,8 @@ html, body {
   </div>
 </header>
 
+<div id="today-section"></div>
+<div id="past-toggle"></div>
 <div id="schedule"></div>
 
 <div class="knockout-teaser">
@@ -450,6 +523,83 @@ const DAYS = [
 let watched = new Set(JSON.parse(localStorage.getItem('wc2026_watched') || '[]'));
 function saveWatched() { localStorage.setItem('wc2026_watched', JSON.stringify([...watched])); }
 
+
+// ── TODAY SECTION ─────────────────────────────────────
+function buildToday() {
+  const container = document.getElementById('today-section');
+  
+  // Get today's date as M/D format matching data
+  const now = new Date();
+  const todayStr = (now.getMonth()+1) + '/' + now.getDate();
+  
+  const todayDay = DAYS.find(d => d.date === todayStr);
+  
+  let html = '<div class="today-section">';
+  html += '<div class="today-label">Today · ' + todayStr + '</div>';
+  
+  if (!todayDay) {
+    html += '<div class="today-none">No matches today</div>';
+  } else {
+    todayDay.matches.forEach(m => {
+      html += `<div class="today-match" onclick="scrollToMatch('${m.id}')">
+        <div class="today-flags">
+          <span class="today-flag">${m.f1}</span>
+          <span class="today-flag">${m.f2}</span>
+        </div>
+        <span class="today-teams">${m.t1} vs ${m.t2}</span>
+        <span class="today-time">${m.time}</span>
+      </div>`;
+    });
+  }
+  
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function scrollToMatch(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add('open');
+  setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+}
+
+
+// ── HIDE PAST DAYS ────────────────────────────────────
+function hidePastDays() {
+  const now = new Date();
+  // Use Eastern time offset (UTC-4 in summer)
+  const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const todayM = et.getMonth() + 1;
+  const todayD = et.getDate();
+
+  let pastCount = 0;
+
+  document.querySelectorAll('.day-group').forEach(group => {
+    const dateEl = group.querySelector('.day-date-big');
+    if (!dateEl) return;
+    const [m, d] = dateEl.textContent.split('/').map(Number);
+    const isPast = (m < todayM) || (m === todayM && d < todayD);
+    if (isPast) {
+      group.classList.add('past');
+      pastCount++;
+    }
+  });
+
+  // Show toggle button if there are past days
+  const toggleEl = document.getElementById('past-toggle');
+  if (pastCount > 0) {
+    let shown = false;
+    toggleEl.innerHTML = `<div class="past-toggle"><button class="past-toggle-btn" id="past-btn">Show ${pastCount} past day${pastCount > 1 ? 's' : ''}</button></div>`;
+    document.getElementById('past-btn').addEventListener('click', () => {
+      shown = !shown;
+      document.querySelectorAll('.day-group.past').forEach(g => g.style.display = shown ? '' : 'none');
+      document.getElementById('past-btn').textContent = shown 
+        ? `Hide past days` 
+        : `Show ${pastCount} past day${pastCount > 1 ? 's' : ''}`;
+    });
+  }
+}
+
 // ── BUILD ─────────────────────────────────────────────
 function build() {
   const container = document.getElementById('schedule');
@@ -528,7 +678,9 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2000);
 }
 
+buildToday();
 build();
+hidePastDays();
 
 if (location.hash) {
   const id = location.hash.slice(1);
